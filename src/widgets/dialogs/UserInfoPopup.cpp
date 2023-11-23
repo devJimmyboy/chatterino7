@@ -43,6 +43,7 @@
 
 const QString TEXT_FOLLOWERS("Followers: %1");
 const QString TEXT_CREATED("Created: %1");
+const QString TEXT_LIVE("Status: %1");
 const QString TEXT_TITLE("%1's Usercard - #%2");
 #define TEXT_USER_ID "ID: "
 #define TEXT_UNAVAILABLE "(not available)"
@@ -384,6 +385,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, QWidget *parent,
                 .assign(&this->ui_.followerCountLabel);
             vbox.emplace<Label>(TEXT_CREATED.arg(""))
                 .assign(&this->ui_.createdDateLabel);
+            vbox.emplace<Label>(TEXT_LIVE.arg(""))
+            .assign(&this->ui_.liveLabel);
+
             vbox.emplace<Label>("").assign(&this->ui_.followageLabel);
             vbox.emplace<Label>("").assign(&this->ui_.subageLabel);
         }
@@ -791,6 +795,7 @@ void UserInfoPopup::updateUserData()
         this->ui_.followerCountLabel->setText(
             TEXT_FOLLOWERS.arg(TEXT_UNAVAILABLE));
         this->ui_.createdDateLabel->setText(TEXT_CREATED.arg(TEXT_UNAVAILABLE));
+        this->ui_.liveLabel->setText(TEXT_LIVE.arg(TEXT_UNAVAILABLE));
 
         this->ui_.nameLabel->setText(this->userName_);
 
@@ -855,6 +860,29 @@ void UserInfoPopup::updateUserData()
                 qCWarning(chatterinoTwitch)
                     << "Error getting followers:" << errorMessage;
             });
+
+        getHelix()->getStreamById(
+            user.id,
+            [this, hack](const bool isLive, const auto &stream) {
+                if (!hack.lock())
+                {
+                    return;
+                }
+                if (isLive)
+                {
+                    this->ui_.liveLabel->setText(TEXT_LIVE.arg(
+                        "LIVE " + localizeNumbers(stream.viewerCount) + " viewers"));
+                }
+                else
+                {
+                    this->ui_.liveLabel->setText(TEXT_LIVE.arg("OFFLINE"));
+                }
+                
+            },
+            []() {
+                qCWarning(chatterinoTwitch)
+                    << "Error getting stream";
+            },[]() {});
 
         // get ignore state
         bool isIgnoring = currentUser->blockedUserIds().contains(user.id);
