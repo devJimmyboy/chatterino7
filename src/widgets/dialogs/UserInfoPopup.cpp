@@ -719,7 +719,18 @@ void UserInfoPopup::setData(const QString &name,
                             const ChannelPtr &contextChannel,
                             const ChannelPtr &openingChannel)
 {
-    this->userName_ = name;
+    const QStringView idPrefix = u"id:";
+    bool isId = name.startsWith(idPrefix);
+    if (isId)
+    {
+        this->userId_ = name.mid(idPrefix.size());
+        this->userName_ = "";
+    }
+    else
+    {
+        this->userName_ = name;
+    }
+
     this->channel_ = openingChannel;
 
     if (!contextChannel->isEmpty())
@@ -741,7 +752,11 @@ void UserInfoPopup::setData(const QString &name,
 
     this->userStateChanged_.invoke();
 
-    this->updateLatestMessages();
+    if (!isId)
+    {
+        this->updateLatestMessages();
+    }
+    // If we're opening by ID, this will be called as soon as we get the information from twitch
 }
 
 void UserInfoPopup::updateLatestMessages()
@@ -809,6 +824,14 @@ void UserInfoPopup::updateUserData()
         if (!hack.lock())
         {
             return;
+        }
+
+        // Correct for when being opened with ID
+        if (this->userName_.isEmpty())
+        {
+            this->userName_ = user.login;
+            // Ensure recent messages are shown
+            this->updateLatestMessages();
         }
 
         this->userId_ = user.id;
@@ -951,8 +974,16 @@ void UserInfoPopup::updateUserData()
             [] {});
     };
 
-    getHelix()->getUserByName(this->userName_, onUserFetched,
-                              onUserFetchFailed);
+    if (!this->userId_.isEmpty())
+    {
+        getHelix()->getUserById(this->userId_, onUserFetched,
+                                onUserFetchFailed);
+    }
+    else
+    {
+        getHelix()->getUserByName(this->userName_, onUserFetched,
+                                  onUserFetchFailed);
+    }
 
     this->ui_.block->setEnabled(false);
     this->ui_.ignoreHighlights->setEnabled(false);
@@ -1009,10 +1040,10 @@ void UserInfoPopup::loadSevenTVAvatar(const HelixUser &user)
     NetworkRequest(SEVENTV_USER_API.arg(user.id))
         .timeout(20000)
         .onSuccess([this, hack = std::weak_ptr<bool>(this->lifetimeHack_)](
-                       const NetworkResult &result) -> Outcome {
+                       const NetworkResult &result) {
             if (!hack.lock())
             {
-                return Success;
+                return;
             }
 
             auto root = result.parseJson();
@@ -1020,7 +1051,7 @@ void UserInfoPopup::loadSevenTVAvatar(const HelixUser &user)
 
             if (url.isEmpty())
             {
-                return Success;
+                return;
             }
             url.prepend("https:");
 
@@ -1034,7 +1065,7 @@ void UserInfoPopup::loadSevenTVAvatar(const HelixUser &user)
             {
                 this->avatarUrl_ = url;
                 this->setSevenTVAvatar(filename);
-                return Success;
+                return;
             }
 
             QNetworkRequest req(url);
@@ -1061,7 +1092,7 @@ void UserInfoPopup::loadSevenTVAvatar(const HelixUser &user)
                                  }
                              });
 
-            return Success;
+            return;
         })
         .execute();
 }
