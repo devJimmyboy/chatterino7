@@ -40,6 +40,14 @@ jobs:
             skip-artifact: false
             skip-crashpad: false
             clang-tidy-review: false
+          # Windows Latest - tests Plugins
+          - os: windows-latest
+            qt-version: 6.5.0
+            force-lto: false
+            plugins: true
+            skip-artifact: false
+            skip-crashpad: false
+            clang-tidy-review: false
           # Ubuntu 22.04, Qt 5.15
           - os: ubuntu-22.04
             qt-version: 5.15.2
