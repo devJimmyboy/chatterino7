@@ -114,6 +114,37 @@ jobs:
     strategy:
       matrix:
         include:
+          - os: windows-latest
+            qt-version: 6.5.0
+            force-lto: false
+            plugins: false
+            skip-artifact: false
+            skip-crashpad: false
+            clang-tidy-review: false
+          # Windows Latest - tests Plugins
+          - os: windows-latest
+            qt-version: 6.5.0
+            force-lto: false
+            plugins: true
+            skip-artifact: false
+            skip-crashpad: false
+            clang-tidy-review: false
+          # Ubuntu 22.04, Qt 5.15
+          - os: ubuntu-22.04
+            qt-version: 5.15.2
+            force-lto: false
+            plugins: false
+            skip-artifact: false
+            skip-crashpad: false
+            clang-tidy-review: true
+          # Ubuntu 22.04, Qt 6.2.4 - tests LTO & plugins
+          - os: ubuntu-22.04
+            qt-version: 6.2.4
+            force-lto: true
+            plugins: true
+            skip-artifact: false
+            skip-crashpad: false
+            clang-tidy-review: false
           # macOS
           - os: macos-latest
             qt-version: 5.15.2
@@ -121,6 +152,7 @@ jobs:
             plugins: false
             skip-artifact: false
             skip-crashpad: false
+            clang-tidy-review: false
           # Windows
           - os: windows-latest
             qt-version: 6.5.0
