@@ -440,7 +440,7 @@ size_t TextLayoutElement::getSelectionIndexCount() const
 void TextLayoutElement::paint(QPainter &painter,
                               const MessageColors & /*messageColors*/)
 {
-    auto app = getApp();
+    auto *app = getApp();
     QString text = this->getText();
     if (text.isRightToLeft() || this->reversedNeutral)
     {
@@ -523,7 +523,7 @@ int TextLayoutElement::getMouseOverIndex(const QPoint &abs) const
         return 0;
     }
 
-    auto app = getApp();
+    auto *app = getApp();
 
     auto metrics = app->fonts->getFontMetrics(this->style_, this->scale_);
     auto x = this->getRect().left();
@@ -557,7 +557,7 @@ int TextLayoutElement::getMouseOverIndex(const QPoint &abs) const
 
 int TextLayoutElement::getXFromIndex(size_t index)
 {
-    auto app = getApp();
+    auto *app = getApp();
 
     QFontMetrics metrics =
         app->fonts->getFontMetrics(this->style_, this->scale_);

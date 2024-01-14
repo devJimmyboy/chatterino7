@@ -445,7 +445,9 @@ std::optional<ChannelPointReward> TwitchChannel::channelPointReward(
     auto it = rewards->find(rewardId);
 
     if (it == rewards->end())
+    {
         return std::nullopt;
+    }
     return it->second;
 }
 
@@ -575,7 +577,7 @@ void TwitchChannel::roomIdChanged()
 
 QString TwitchChannel::prepareMessage(const QString &message) const
 {
-    auto app = getApp();
+    auto *app = getApp();
     QString parsedMessage = app->emotes->emojis.replaceShortCodes(message);
 
     parsedMessage = parsedMessage.simplified();
@@ -621,7 +623,7 @@ QString TwitchChannel::prepareMessage(const QString &message) const
 
 void TwitchChannel::sendMessage(const QString &message)
 {
-    auto app = getApp();
+    auto *app = getApp();
     if (!app->accounts->twitch.isLoggedIn())
     {
         if (!message.isEmpty())
@@ -655,7 +657,7 @@ void TwitchChannel::sendMessage(const QString &message)
 
 void TwitchChannel::sendReply(const QString &message, const QString &replyId)
 {
-    auto app = getApp();
+    auto *app = getApp();
     if (!app->accounts->twitch.isLoggedIn())
     {
         if (!message.isEmpty())
@@ -806,7 +808,9 @@ std::optional<EmotePtr> TwitchChannel::bttvEmote(const EmoteName &name) const
     auto it = emotes->find(name);
 
     if (it == emotes->end())
+    {
         return std::nullopt;
+    }
     return it->second;
 }
 
@@ -816,7 +820,9 @@ std::optional<EmotePtr> TwitchChannel::ffzEmote(const EmoteName &name) const
     auto it = emotes->find(name);
 
     if (it == emotes->end())
+    {
         return std::nullopt;
+    }
     return it->second;
 }
 
@@ -1184,11 +1190,15 @@ void TwitchChannel::loadRecentMessages()
         [weak](const auto &messages) {
             auto shared = weak.lock();
             if (!shared)
+            {
                 return;
+            }
 
-            auto tc = dynamic_cast<TwitchChannel *>(shared.get());
+            auto *tc = dynamic_cast<TwitchChannel *>(shared.get());
             if (!tc)
+            {
                 return;
+            }
 
             tc->addMessagesAtStart(messages);
             tc->loadingRecentMessages_.clear();
@@ -1211,11 +1221,15 @@ void TwitchChannel::loadRecentMessages()
         [weak]() {
             auto shared = weak.lock();
             if (!shared)
+            {
                 return;
+            }
 
-            auto tc = dynamic_cast<TwitchChannel *>(shared.get());
+            auto *tc = dynamic_cast<TwitchChannel *>(shared.get());
             if (!tc)
+            {
                 return;
+            }
 
             tc->loadingRecentMessages_.clear();
         },
@@ -1256,11 +1270,15 @@ void TwitchChannel::loadRecentMessagesReconnect()
         [weak](const auto &messages) {
             auto shared = weak.lock();
             if (!shared)
+            {
                 return;
+            }
 
-            auto tc = dynamic_cast<TwitchChannel *>(shared.get());
+            auto *tc = dynamic_cast<TwitchChannel *>(shared.get());
             if (!tc)
+            {
                 return;
+            }
 
             tc->fillInMissingMessages(messages);
             tc->loadingRecentMessages_.clear();
@@ -1268,11 +1286,15 @@ void TwitchChannel::loadRecentMessagesReconnect()
         [weak]() {
             auto shared = weak.lock();
             if (!shared)
+            {
                 return;
+            }
 
-            auto tc = dynamic_cast<TwitchChannel *>(shared.get());
+            auto *tc = dynamic_cast<TwitchChannel *>(shared.get());
             if (!tc)
+            {
                 return;
+            }
 
             tc->loadingRecentMessages_.clear();
         },

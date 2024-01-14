@@ -82,7 +82,9 @@ namespace {
     bool checkMessageUserName(const QString &userName, MessagePtr message)
     {
         if (message->flags.has(MessageFlag::Whisper))
+        {
             return false;
+        }
 
         bool isSubscription = message->flags.has(MessageFlag::Subscription) &&
                               message->loginName.isEmpty() &&
@@ -315,12 +317,12 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                         menu->addAction(
                             "Open channel in a new popup window", this,
                             [loginName] {
-                                auto app = getApp();
+                                auto *app = getApp();
                                 auto &window = app->windows->createWindow(
                                     WindowType::Popup, true);
-                                auto split = window.getNotebook()
-                                                 .getOrAddSelectedPage()
-                                                 ->appendNewSplit(false);
+                                auto *split = window.getNotebook()
+                                                  .getOrAddSelectedPage()
+                                                  ->appendNewSplit(false);
                                 split->setChannel(app->twitch->getOrAddChannel(
                                     loginName.toLower()));
                             });
@@ -797,7 +799,9 @@ void UserInfoPopup::updateLatestMessages()
             this->underlyingChannel_->messageAppended.connect(
                 [this, hasMessages](auto message, auto) {
                     if (!checkMessageUserName(this->userName_, message))
+                    {
                         return;
+                    }
 
                     if (hasMessages)
                     {
@@ -1026,15 +1030,9 @@ void UserInfoPopup::updateUserData()
 
 void UserInfoPopup::loadAvatar(const HelixUser &user)
 {
-    auto filename =
-        getPaths()->cacheDirectory() + "/" +
-        user.profileImageUrl.right(user.profileImageUrl.lastIndexOf('/'))
-            .replace('/', 'a');
-    QFile cacheFile(filename);
-    if (cacheFile.exists())
-    {
-        cacheFile.open(QIODevice::ReadOnly);
-        QPixmap avatar{};
+    QNetworkRequest req(url);
+    static auto *manager = new QNetworkAccessManager();
+    auto *reply = manager->get(req);
 
         avatar.loadFromData(cacheFile.readAll());
         this->ui_.avatarButton->setPixmap(avatar);
