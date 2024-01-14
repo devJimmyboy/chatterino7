@@ -4,7 +4,7 @@
 #include "util/LayoutHelper.hpp"
 #include "util/RapidJsonSerializeQString.hpp"
 #include "widgets/dialogs/ColorPickerDialog.hpp"
-#include "widgets/helper/ColorButton.hpp"
+#include "widgets/helper/color/ColorButton.hpp"
 #include "widgets/helper/Line.hpp"
 
 #include <QRegularExpression>
@@ -125,6 +125,28 @@ QCheckBox *GeneralPageView::addCheckbox(const QString &text,
     return check;
 }
 
+QCheckBox *GeneralPageView::addCustomCheckbox(const QString &text,
+                                              const std::function<bool()> &load,
+                                              std::function<void(bool)> save,
+                                              const QString &toolTipText)
+{
+    auto *check = new QCheckBox(text);
+    this->addToolTip(*check, toolTipText);
+
+    check->setChecked(load());
+
+    QObject::connect(check, &QCheckBox::toggled, this,
+                     [save = std::move(save)](bool state) {
+                         save(state);
+                     });
+
+    this->addWidget(check);
+
+    this->groups_.back().widgets.push_back({check, {text}});
+
+    return check;
+}
+
 ComboBox *GeneralPageView::addDropdown(const QString &text,
                                        const QStringList &list,
                                        QString toolTipText)
@@ -192,20 +214,18 @@ ColorButton *GeneralPageView::addColorButton(
 
     QObject::connect(
         colorButton, &ColorButton::clicked, [this, &setting, colorButton]() {
-            auto dialog = new ColorPickerDialog(QColor(setting), this);
-            dialog->setAttribute(Qt::WA_DeleteOnClose);
-            dialog->show();
-            // We can safely ignore this signal connection, for now, since the
+            auto *dialog = new ColorPickerDialog(QColor(setting), this);
             // colorButton & setting are never deleted and the signal is deleted
             // once the dialog is closed
-            std::ignore = dialog->closed.connect(
-                [&setting, colorButton](QColor selected) {
-                    if (selected.isValid())
-                    {
-                        setting = selected.name(QColor::HexArgb);
-                        colorButton->setColor(selected);
-                    }
-                });
+            QObject::connect(dialog, &ColorPickerDialog::colorConfirmed, this,
+                             [&setting, colorButton](auto selected) {
+                                 if (selected.isValid())
+                                 {
+                                     setting = selected.name(QColor::HexArgb);
+                                     colorButton->setColor(selected);
+                                 }
+                             });
+            dialog->show();
         });
 
     this->groups_.back().widgets.push_back({label, {text}});

@@ -28,7 +28,7 @@ env:
 
 jobs:
   build:
-    name: "Build ${{ matrix.os }}, Qt ${{ matrix.qt-version }} (LTO:${{ matrix.force-lto }}, crashpad:${{ matrix.skip-crashpad && 'off' || 'on' }})"
+    name: "Build ${{ matrix.os }}${{ matrix.arch && format(' ({0})', matrix.arch) || ''}}, Qt ${{ matrix.qt-version }} (LTO:${{ matrix.force-lto }}, crashpad:${{ matrix.skip-crashpad && 'off' || 'on' }})"
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -40,7 +40,6 @@ jobs:
             plugins: true
             skip-artifact: false
             skip-crashpad: false
-            clang-tidy-review: false
           # Ubuntu 22.04, Qt 5.15
           - os: ubuntu-22.04
             qt-version: 5.15.2
@@ -48,7 +47,6 @@ jobs:
             plugins: false
             skip-artifact: false
             skip-crashpad: false
-            clang-tidy-review: true
           # Ubuntu 22.04, Qt 6.2.4 - tests LTO & plugins
           - os: ubuntu-22.04
             qt-version: 6.2.4
@@ -56,23 +54,22 @@ jobs:
             plugins: true
             skip-artifact: false
             skip-crashpad: false
-            clang-tidy-review: false
-          # macOS
-          - os: macos-latest
-            qt-version: 5.15.2
-            force-lto: false
-            plugins: false
-            skip-artifact: false
-            skip-crashpad: false
-            clang-tidy-review: false
-          # Windows
-          - os: windows-latest
+          # macOS (ARM)
+          - os: macos-12
             qt-version: 6.5.0
+            arch: arm64
             force-lto: false
             plugins: false
             skip-artifact: false
             skip-crashpad: false
-            clang-tidy-review: false
+          # macOS (x86)
+          - os: macos-12
+            qt-version: 6.5.0
+            arch: x86_64
+            force-lto: false
+            plugins: false
+            skip-artifact: false
+            skip-crashpad: false
 
       fail-fast: false
 
@@ -152,7 +149,7 @@ jobs:
       # WINDOWS
       - name: Enable Developer Command Prompt (Windows)
         if: startsWith(matrix.os, 'windows')
-        uses: ilammy/msvc-dev-cmd@v1.12.1
+        uses: ilammy/msvc-dev-cmd@v1.13.0
 
       - name: Setup conan variables (Windows)
         if: startsWith(matrix.os, 'windows')
@@ -231,9 +228,9 @@ jobs:
         run: |
           cd build
           set cl=/MP
-          nmake /S /NOLOGO crashpad_handler
+          nmake /S /NOLOGO chatterino-crash-handler
           mkdir Chatterino2/crashpad
-          cp bin/crashpad/crashpad_handler.exe Chatterino2/crashpad/crashpad_handler.exe
+          cp bin/crashpad/crashpad-handler.exe Chatterino2/crashpad/crashpad-handler.exe
           7z a bin/chatterino-Qt-${{ matrix.qt-version }}.pdb.7z bin/chatterino.pdb
 
       - name: Prepare build dir (windows)
@@ -258,14 +255,14 @@ jobs:
 
       - name: Upload artifact (Windows - binary)
         if: startsWith(matrix.os, 'windows') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: chatterino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
           path: build/chatterino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
 
       - name: Upload artifact (Windows - symbols)
         if: startsWith(matrix.os, 'windows') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: chatterino-windows-x86-64-Qt-${{ matrix.qt-version }}-symbols.pdb.7z
           path: build/bin/chatterino-Qt-${{ matrix.qt-version }}.pdb.7z
@@ -389,14 +386,14 @@ jobs:
 
       - name: Upload artifact - AppImage (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu-22.04') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Chatterino-x86_64-${{ matrix.qt-version }}.AppImage
           path: build/Chatterino-x86_64.AppImage
 
       - name: Upload artifact - .deb (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Chatterino-${{ matrix.os }}-Qt-${{ matrix.qt-version }}.deb
           path: build/Chatterino-${{ matrix.os }}-x86_64.deb
@@ -405,7 +402,18 @@ jobs:
       - name: Install dependencies (MacOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install boost openssl rapidjson p7zip create-dmg cmake tree libavif
+          LIBS=(boost openssl rapidjson)
+          for package in "${LIBS[@]}"
+          do
+            brew fetch --force --bottle-tag=${{ matrix.arch }}_monterey $package
+            formula=$(brew --cache --bottle-tag=${{ matrix.arch }}_monterey $package)
+            if [[ $package == "openssl" ]]; then
+              brew reinstall $formula
+            else
+              brew install $formula
+            fi
+          done
+          brew install p7zip create-dmg cmake tree
         shell: bash
 
       - name: Build (MacOS)
@@ -422,6 +430,7 @@ jobs:
               -DCHATTERINO_PLUGINS="$C2_PLUGINS" \
               -DBUILD_WITH_QT6="$C2_BUILD_WITH_QT6" \
               -DCHATTERINO_NO_AVIF_PLUGIN=On \
+              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
               ..
           make -j"$(sysctl -n hw.logicalcpu)"
         shell: bash
@@ -429,22 +438,30 @@ jobs:
       - name: Package (MacOS)
         if: startsWith(matrix.os, 'macos')
         env:
-          OUTPUT_DMG_PATH: chatterino-macos-Qt-${{ matrix.qt-version}}.dmg
+          OUTPUT_DMG_PATH: chatterino-macos-Qt-${{ matrix.qt-version}}-${{ matrix.arch }}.dmg
         run: |
           ls -la
           pwd
           ls -la build || true
           cd build
+          export MACOS_CODESIGN_CERTIFICATE="-"
+          echo "-> $MACOS_CODESIGN_CERTIFICATE"
+
+          brew reinstall openssl
+          echo "Downloading kimageformats plugins"
+          curl -SsfLo kimg.zip "https://github.com/nerixyz/kimageformats-binaries/releases/download/cont/kimageformats-macos-latest-${{ matrix.qt-version}}.zip"
+          ${{matrix.arch == 'arm64' && 'brew reinstall $(brew --cache --bottle-tag=arm64_monterey openssl)' || ''}}
+
           ./../.CI/MacDeploy.sh
           ./../.CI/CreateDMG.sh
         shell: bash
 
       - name: Upload artifact (MacOS)
         if: startsWith(matrix.os, 'macos')
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: chatterino-macos-Qt-${{ matrix.qt-version }}.dmg
-          path: build/chatterino-macos-Qt-${{ matrix.qt-version }}.dmg
+          name: chatterino-macos-Qt-${{ matrix.qt-version }}-${{ matrix.arch }}.dmg
+          path: build/chatterino-macos-Qt-${{ matrix.qt-version }}-${{ matrix.arch }}.dmg
   create-release:
     needs: build
     runs-on: ubuntu-latest
@@ -455,53 +472,60 @@ jobs:
         with:
           fetch-depth: 0 # allows for tags access
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Windows Qt6.5.0
         with:
           name: chatterino-windows-x86-64-Qt-6.5.0.zip
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Windows Qt6.5.0 symbols
         with:
           name: chatterino-windows-x86-64-Qt-6.5.0-symbols.pdb.7z
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Linux Qt5.15.2 AppImage
         with:
           name: Chatterino-x86_64-5.15.2.AppImage
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Linux Qt6.2.4 AppImage
         with:
           name: Chatterino-x86_64-6.2.4.AppImage
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Ubuntu 22.04 Qt5.15.2 deb
         with:
           name: Chatterino-ubuntu-22.04-Qt-5.15.2.deb
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Ubuntu 22.04 Qt6.2.4 deb
         with:
           name: Chatterino-ubuntu-22.04-Qt-6.2.4.deb
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v3
-        name: macOS x86_64 Qt5.15.2 dmg
+      - uses: actions/download-artifact@v4
+        name: macOS x86_64 Qt6.5.0 x86 dmg
         with:
-          name: chatterino-macos-Qt-5.15.2.dmg
+          name: chatterino-macos-Qt-6.5.0-x86_64.dmg
+          path: release-artifacts/
+
+      - uses: actions/download-artifact@v4
+        name: macOS x86_64 Qt6.5.0 ARM dmg
+        with:
+          name: chatterino-macos-Qt-6.5.0-arm64.dmg
           path: release-artifacts/
 
       - name: Rename artifacts
         run: |
           ls -l
-          # Rename the macos build to indicate that it's for macOS 10.15 users
-          mv chatterino-macos-Qt-5.15.2.dmg Chatterino-macOS-12.0.dmg
+          # Rename the macos build to indicate that it's for macOS 12.0 users
+          mv chatterino-macos-Qt-6.5.0-x86_64.dmg Chatterino-macOS-12.0-x86_64.dmg
+          mv chatterino-macos-Qt-6.5.0-arm64.dmg Chatterino-macOS-12.0-arm64.dmg
         working-directory: release-artifacts
         shell: bash
 

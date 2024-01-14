@@ -1,4 +1,4 @@
-#include "TwitchIrcServer.hpp"
+#include "providers/twitch/TwitchIrcServer.hpp"
 
 #include "Application.hpp"
 #include "common/Channel.hpp"
@@ -13,7 +13,6 @@
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/IrcMessageHandler.hpp"
-#include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Settings.hpp"
@@ -25,10 +24,7 @@
 
 #include <cassert>
 
-// using namespace Communi;
 using namespace std::chrono_literals;
-
-#define TWITCH_PUBSUB_URL "wss://pubsub-edge.twitch.tv"
 
 namespace {
 
@@ -43,11 +39,10 @@ TwitchIrcServer::TwitchIrcServer()
     : whispersChannel(new Channel("/whispers", Channel::Type::TwitchWhispers))
     , mentionsChannel(new Channel("/mentions", Channel::Type::TwitchMentions))
     , liveChannel(new Channel("/live", Channel::Type::TwitchLive))
+    , automodChannel(new Channel("/automod", Channel::Type::TwitchAutomod))
     , watchingChannel(Channel::getEmpty(), Channel::Type::TwitchWatching)
 {
     this->initializeIrc();
-
-    this->pubsub = new PubSub(TWITCH_PUBSUB_URL);
 
     if (getSettings()->enableBTTVLiveUpdates &&
         getSettings()->enableBTTVChannelEmotes)
@@ -74,7 +69,6 @@ void TwitchIrcServer::initialize(Settings &settings, Paths &paths)
     getApp()->accounts->twitch.currentUserChanged.connect([this]() {
         postToThread([this] {
             this->connect();
-            this->pubsub->setAccount(getApp()->accounts->twitch.getCurrent());
         });
     });
 
@@ -219,6 +213,7 @@ void TwitchIrcServer::readConnectionMessageReceived(
     {
         this->addGlobalSystemMessage(
             "Twitch Servers requested us to reconnect, reconnecting");
+        this->markChannelsConnected();
         this->connect();
     }
     else if (command == "GLOBALUSERSTATE")
@@ -270,6 +265,11 @@ std::shared_ptr<Channel> TwitchIrcServer::getCustomChannel(
     if (channelName == "/live")
     {
         return this->liveChannel;
+    }
+
+    if (channelName == "/automod")
+    {
+        return this->automodChannel;
     }
 
     static auto getTimer = [](ChannelPtr channel, int msBetweenMessages,
@@ -383,6 +383,7 @@ void TwitchIrcServer::forEachChannelAndSpecialChannels(
     func(this->whispersChannel);
     func(this->mentionsChannel);
     func(this->liveChannel);
+    func(this->automodChannel);
 }
 
 std::shared_ptr<Channel> TwitchIrcServer::getChannelOrEmptyByID(

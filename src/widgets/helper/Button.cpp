@@ -222,12 +222,20 @@ void Button::enterEvent(QEnterEvent * /*event*/)
 void Button::enterEvent(QEvent * /*event*/)
 #endif
 {
-    this->mouseOver_ = true;
+    if (!this->mouseOver_)
+    {
+        this->mouseOver_ = true;
+        this->update();
+    }
 }
 
-void Button::leaveEvent(QEvent *)
+void Button::leaveEvent(QEvent * /*event*/)
 {
-    this->mouseOver_ = false;
+    if (this->mouseOver_)
+    {
+        this->mouseOver_ = false;
+        this->update();
+    }
 }
 
 void Button::mousePressEvent(QMouseEvent *event)
@@ -261,17 +269,26 @@ void Button::mousePressEvent(QMouseEvent *event)
 void Button::mouseReleaseEvent(QMouseEvent *event)
 {
     if (!this->enabled_)
+    {
         return;
+    }
+
+    bool isInside = this->rect().contains(event->pos());
 
     if (event->button() == Qt::LeftButton)
     {
         this->mouseDown_ = false;
 
-        if (this->rect().contains(event->pos()))
+        if (isInside)
+        {
             emit leftClicked();
+        }
     }
 
-    emit clicked(event->button());
+    if (isInside)
+    {
+        emit clicked(event->button());
+    }
 }
 
 void Button::mouseMoveEvent(QMouseEvent *event)

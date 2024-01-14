@@ -50,6 +50,9 @@ set(SOURCE_FILES
 
         common/enums/MessageOverflow.hpp
 
+        common/network/NetworkTask.hpp
+        common/network/NetworkTask.cpp
+
         controllers/accounts/Account.cpp
         controllers/accounts/Account.hpp
         controllers/accounts/AccountController.cpp
@@ -123,13 +126,15 @@ set(SOURCE_FILES
         controllers/completion/sources/UnifiedSource.hpp
         controllers/completion/sources/UserSource.cpp
         controllers/completion/sources/UserSource.hpp
-        controllers/completion/strategies/Strategy.hpp
         controllers/completion/strategies/ClassicEmoteStrategy.cpp
         controllers/completion/strategies/ClassicEmoteStrategy.hpp
         controllers/completion/strategies/ClassicUserStrategy.cpp
         controllers/completion/strategies/ClassicUserStrategy.hpp
         controllers/completion/strategies/CommandStrategy.cpp
         controllers/completion/strategies/CommandStrategy.hpp
+        controllers/completion/strategies/SmartEmoteStrategy.cpp
+        controllers/completion/strategies/SmartEmoteStrategy.cpp
+        controllers/completion/strategies/Strategy.hpp
         controllers/completion/TabCompletionModel.cpp
         controllers/completion/TabCompletionModel.hpp
 
@@ -224,8 +229,11 @@ set(SOURCE_FILES
         controllers/plugins/LuaUtilities.cpp
         controllers/plugins/LuaUtilities.hpp
 
-        controllers/sound/SoundController.cpp
-        controllers/sound/SoundController.hpp
+        controllers/sound/ISoundController.hpp
+        controllers/sound/MiniaudioBackend.cpp
+        controllers/sound/MiniaudioBackend.hpp
+        controllers/sound/NullBackend.cpp
+        controllers/sound/NullBackend.hpp
 
         controllers/twitch/LiveController.cpp
         controllers/twitch/LiveController.hpp
@@ -284,8 +292,6 @@ set(SOURCE_FILES
         messages/search/SubtierPredicate.cpp
         messages/search/SubtierPredicate.hpp
 
-        providers/Crashpad.cpp
-        providers/Crashpad.hpp
         providers/IvrApi.cpp
         providers/IvrApi.hpp
         providers/LinkResolver.cpp
@@ -428,6 +434,8 @@ set(SOURCE_FILES
         providers/twitch/pubsubmessages/ChatModeratorAction.hpp
         providers/twitch/pubsubmessages/Listen.cpp
         providers/twitch/pubsubmessages/Listen.hpp
+        providers/twitch/pubsubmessages/LowTrustUsers.cpp
+        providers/twitch/pubsubmessages/LowTrustUsers.hpp
         providers/twitch/pubsubmessages/Message.hpp
         providers/twitch/pubsubmessages/Unlisten.cpp
         providers/twitch/pubsubmessages/Unlisten.hpp
@@ -439,6 +447,8 @@ set(SOURCE_FILES
 
         singletons/Badges.cpp
         singletons/Badges.hpp
+        singletons/CrashHandler.cpp
+        singletons/CrashHandler.hpp
         singletons/Emotes.cpp
         singletons/Emotes.hpp
         singletons/Fonts.cpp
@@ -469,6 +479,7 @@ set(SOURCE_FILES
         singletons/helper/LoggingChannel.cpp
         singletons/helper/LoggingChannel.hpp
 
+        util/AbandonObject.hpp
         util/AttachToConsole.cpp
         util/AttachToConsole.hpp
         util/CancellationToken.hpp
@@ -602,12 +613,25 @@ set(SOURCE_FILES
         widgets/dialogs/switcher/SwitchSplitItem.cpp
         widgets/dialogs/switcher/SwitchSplitItem.hpp
 
+        widgets/helper/color/AlphaSlider.cpp
+        widgets/helper/color/AlphaSlider.hpp
+        widgets/helper/color/Checkerboard.cpp
+        widgets/helper/color/Checkerboard.hpp
+        widgets/helper/color/ColorButton.cpp
+        widgets/helper/color/ColorButton.hpp
+        widgets/helper/color/ColorInput.cpp
+        widgets/helper/color/ColorInput.hpp
+        widgets/helper/color/ColorItemDelegate.cpp
+        widgets/helper/color/ColorItemDelegate.hpp
+        widgets/helper/color/HueSlider.cpp
+        widgets/helper/color/HueSlider.hpp
+        widgets/helper/color/SBCanvas.cpp
+        widgets/helper/color/SBCanvas.hpp
+
         widgets/helper/Button.cpp
         widgets/helper/Button.hpp
         widgets/helper/ChannelView.cpp
         widgets/helper/ChannelView.hpp
-        widgets/helper/ColorButton.cpp
-        widgets/helper/ColorButton.hpp
         widgets/helper/ComboBoxItemDelegate.cpp
         widgets/helper/ComboBoxItemDelegate.hpp
         widgets/helper/DebugPopup.cpp
@@ -622,8 +646,6 @@ set(SOURCE_FILES
         widgets/helper/NotebookButton.hpp
         widgets/helper/NotebookTab.cpp
         widgets/helper/NotebookTab.hpp
-        widgets/helper/QColorPicker.cpp
-        widgets/helper/QColorPicker.hpp
         widgets/helper/RegExpItemDelegate.cpp
         widgets/helper/RegExpItemDelegate.hpp
         widgets/helper/TrimRegExpValidator.cpp
@@ -640,6 +662,8 @@ set(SOURCE_FILES
         widgets/helper/SignalLabel.hpp
         widgets/helper/TitlebarButton.cpp
         widgets/helper/TitlebarButton.hpp
+        widgets/helper/TitlebarButtons.cpp
+        widgets/helper/TitlebarButtons.hpp
 
         widgets/listview/GenericItemDelegate.cpp
         widgets/listview/GenericItemDelegate.hpp
@@ -935,6 +959,7 @@ target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
     IRC_STATIC
     IRC_NAMESPACE=Communi
     )
+
 if (USE_SYSTEM_QTKEYCHAIN)
     target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
         CMAKE_BUILD
@@ -1024,7 +1049,6 @@ endif ()
 if (BUILD_WITH_CRASHPAD)
     target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_CRASHPAD)
     target_link_libraries(${LIBRARY_PROJECT} PUBLIC crashpad::client)
-    set_target_directory_hierarchy(crashpad_handler crashpad)
 endif()
 
 # Configure compiler warnings
@@ -1084,7 +1108,6 @@ else ()
         -Wno-switch
         -Wno-deprecated-declarations
         -Wno-sign-compare
-        -Wno-unused-variable
 
         # Disabling strict-aliasing warnings for now, although we probably want to re-enable this in the future
         -Wno-strict-aliasing

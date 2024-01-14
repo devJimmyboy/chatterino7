@@ -59,7 +59,6 @@ namespace {
 #else
     const QString MAGIC_MESSAGE_SUFFIX = QString::fromUtf8(u8" \U000E0000");
 #endif
-    constexpr int TITLE_REFRESH_PERIOD = 10000;
     constexpr int CLIP_CREATION_COOLDOWN = 5000;
     const QString CLIPS_LINK("https://clips.twitch.tv/%1");
     const QString CLIPS_FAILURE_CLIPS_DISABLED_TEXT(
@@ -91,6 +90,13 @@ TwitchChannel::TwitchChannel(const QString &name)
 {
     qCDebug(chatterinoTwitch) << "[TwitchChannel" << name << "] Opened";
 
+    if (!getApp())
+    {
+        // This is intended for tests and benchmarks.
+        // Irc, Pubsub, live-updates, and live-notifications aren't mocked there.
+        return;
+    }
+
     this->bSignals_.emplace_back(
         getApp()->accounts->twitch.currentUserChanged.connect([this] {
             this->setMod(false);
@@ -106,17 +112,13 @@ TwitchChannel::TwitchChannel(const QString &name)
 
     // We can safely ignore this signal connection this has no external dependencies - once the signal
     // is destroyed, it will no longer be able to fire
-    std::ignore = this->connected.connect([this]() {
-        if (this->roomId().isEmpty())
+    std::ignore = this->joined.connect([this]() {
+        if (this->disconnected_)
         {
-            // If we get a reconnected event when the room id is not set, we
-            // just connected for the first time. After receiving the first
-            // message from a channel, setRoomId is called and further
-            // invocations of this event will load recent messages.
-            return;
+            this->loadRecentMessagesReconnect();
+            this->lastConnectedAt_ = std::chrono::system_clock::now();
+            this->disconnected_ = false;
         }
-
-        this->loadRecentMessagesReconnect();
     });
 
     // timers
@@ -227,6 +229,13 @@ TwitchChannel::TwitchChannel(const QString &name)
 
 TwitchChannel::~TwitchChannel()
 {
+    if (!getApp())
+    {
+        // This is for tests and benchmarks, where live-updates aren't mocked
+        // see comment in constructor.
+        return;
+    }
+
     getApp()->twitch->dropSeventvChannel(this->seventvUserID_,
                                          this->seventvEmoteSetID_);
 
@@ -290,8 +299,9 @@ void TwitchChannel::refreshBTTVChannelEmotes(bool manualRefresh)
         weakOf<Channel>(this), this->roomId(), this->getLocalizedName(),
         [this, weak = weakOf<Channel>(this)](auto &&emoteMap) {
             if (auto shared = weak.lock())
-                this->bttvEmotes_.set(
-                    std::make_shared<EmoteMap>(std::move(emoteMap)));
+            {
+                this->setBttvEmotes(std::make_shared<const EmoteMap>(emoteMap));
+            }
         },
         manualRefresh);
 }
@@ -308,8 +318,9 @@ void TwitchChannel::refreshFFZChannelEmotes(bool manualRefresh)
         weakOf<Channel>(this), this->roomId(),
         [this, weak = weakOf<Channel>(this)](auto &&emoteMap) {
             if (auto shared = weak.lock())
-                this->ffzEmotes_.set(
-                    std::make_shared<EmoteMap>(std::move(emoteMap)));
+            {
+                this->setFfzEmotes(std::make_shared<const EmoteMap>(emoteMap));
+            }
         },
         [this, weak = weakOf<Channel>(this)](auto &&modBadge) {
             if (auto shared = weak.lock())
@@ -340,8 +351,8 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
                                              auto channelInfo) {
             if (auto shared = weak.lock())
             {
-                this->seventvEmotes_.set(std::make_shared<EmoteMap>(
-                    std::forward<decltype(emoteMap)>(emoteMap)));
+                this->setSeventvEmotes(
+                    std::make_shared<const EmoteMap>(emoteMap));
                 this->updateSeventvData(channelInfo.userID,
                                         channelInfo.emoteSetID);
                 this->seventvUserTwitchConnectionIndex_ =
@@ -349,6 +360,21 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
             }
         },
         manualRefresh);
+}
+
+void TwitchChannel::setBttvEmotes(std::shared_ptr<const EmoteMap> &&map)
+{
+    this->bttvEmotes_.set(std::move(map));
+}
+
+void TwitchChannel::setFfzEmotes(std::shared_ptr<const EmoteMap> &&map)
+{
+    this->ffzEmotes_.set(std::move(map));
+}
+
+void TwitchChannel::setSeventvEmotes(std::shared_ptr<const EmoteMap> &&map)
+{
+    this->seventvEmotes_.set(std::move(map));
 }
 
 void TwitchChannel::addQueuedRedemption(const QString &rewardId,
@@ -708,9 +734,10 @@ void TwitchChannel::setStaff(bool value)
 
 bool TwitchChannel::isBroadcaster() const
 {
-    auto app = getApp();
+    auto *app = getIApp();
 
-    return this->getName() == app->accounts->twitch.getCurrent()->getUserName();
+    return this->getName() ==
+           app->getAccounts()->twitch.getCurrent()->getUserName();
 }
 
 bool TwitchChannel::hasHighRateLimit() const
@@ -738,8 +765,14 @@ void TwitchChannel::setRoomId(const QString &id)
     if (*this->roomID_.accessConst() != id)
     {
         *this->roomID_.access() = id;
-        this->roomIdChanged();
-        this->loadRecentMessages();
+        // This is intended for tests and benchmarks. See comment in constructor.
+        if (getApp())
+        {
+            this->roomIdChanged();
+            this->loadRecentMessages();
+        }
+        this->disconnected_ = false;
+        this->lastConnectedAt_ = std::chrono::system_clock::now();
     }
 }
 
@@ -1114,6 +1147,25 @@ bool TwitchChannel::setLive(bool newLiveStatus)
     return true;
 }
 
+void TwitchChannel::markConnected()
+{
+    if (this->lastConnectedAt_.has_value() && !this->disconnected_)
+    {
+        this->lastConnectedAt_ = std::chrono::system_clock::now();
+    }
+}
+
+void TwitchChannel::markDisconnected()
+{
+    if (this->roomId().isEmpty())
+    {
+        // we were never joined in the first place
+        return;
+    }
+
+    this->disconnected_ = true;
+}
+
 void TwitchChannel::loadRecentMessages()
 {
     if (!getSettings()->loadTwitchMessageHistoryOnConnect)
@@ -1166,7 +1218,9 @@ void TwitchChannel::loadRecentMessages()
                 return;
 
             tc->loadingRecentMessages_.clear();
-        });
+        },
+        getSettings()->twitchMessageHistoryLimit.getValue(), std::nullopt,
+        std::nullopt, false);
 }
 
 void TwitchChannel::loadRecentMessagesReconnect()
@@ -1179,6 +1233,21 @@ void TwitchChannel::loadRecentMessagesReconnect()
     if (this->loadingRecentMessages_.test_and_set())
     {
         return;  // already loading
+    }
+
+    const auto now = std::chrono::system_clock::now();
+    int limit = getSettings()->twitchMessageHistoryLimit.getValue();
+    if (this->lastConnectedAt_.has_value())
+    {
+        // calculate how many messages could have occured
+        // while we were not connected to the channel
+        // assuming a maximum of 10 messages per second
+        const auto secondsSinceDisconnect =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                now - this->lastConnectedAt_.value())
+                .count();
+        limit =
+            std::min(static_cast<int>(secondsSinceDisconnect + 1) * 10, limit);
     }
 
     auto weak = weakOf<Channel>(this);
@@ -1206,7 +1275,8 @@ void TwitchChannel::loadRecentMessagesReconnect()
                 return;
 
             tc->loadingRecentMessages_.clear();
-        });
+        },
+        limit, this->lastConnectedAt_, now, true);
 }
 
 void TwitchChannel::refreshPubSub()
@@ -1219,11 +1289,15 @@ void TwitchChannel::refreshPubSub()
 
     auto currentAccount = getApp()->accounts->twitch.getCurrent();
 
-    getApp()->twitch->pubsub->setAccount(currentAccount);
+    getIApp()->getTwitchPubSub()->setAccount(currentAccount);
 
-    getApp()->twitch->pubsub->listenToChannelModerationActions(roomId);
-    getApp()->twitch->pubsub->listenToAutomod(roomId);
-    getApp()->twitch->pubsub->listenToChannelPointRewards(roomId);
+    getIApp()->getTwitchPubSub()->listenToChannelModerationActions(roomId);
+    if (this->hasModRights())
+    {
+        getIApp()->getTwitchPubSub()->listenToAutomod(roomId);
+        getIApp()->getTwitchPubSub()->listenToLowTrustUsers(roomId);
+    }
+    getIApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
 }
 
 void TwitchChannel::refreshChatters()

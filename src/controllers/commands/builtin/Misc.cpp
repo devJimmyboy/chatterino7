@@ -66,7 +66,7 @@ QString uptime(const CommandContext &ctx)
     if (ctx.twitchChannel == nullptr)
     {
         ctx.channel->addMessage(makeSystemMessage(
-            "The /uptime command only works in Twitch Channels"));
+            "The /uptime command only works in Twitch Channels."));
         return "";
     }
 
@@ -188,14 +188,14 @@ QString clip(const CommandContext &ctx)
         type != Channel::Type::Twitch && type != Channel::Type::TwitchWatching)
     {
         ctx.channel->addMessage(makeSystemMessage(
-            "The /clip command only works in Twitch Channels"));
+            "The /clip command only works in Twitch Channels."));
         return "";
     }
 
     if (ctx.twitchChannel == nullptr)
     {
         ctx.channel->addMessage(makeSystemMessage(
-            "The /clip command only works in Twitch Channels"));
+            "The /clip command only works in Twitch Channels."));
         return "";
     }
 
@@ -214,7 +214,7 @@ QString marker(const CommandContext &ctx)
     if (ctx.twitchChannel == nullptr)
     {
         ctx.channel->addMessage(makeSystemMessage(
-            "The /marker command only works in Twitch channels"));
+            "The /marker command only works in Twitch channels."));
         return "";
     }
 
@@ -520,7 +520,7 @@ QString unstableSetUserClientSideColor(const CommandContext &ctx)
     {
         ctx.channel->addMessage(
             makeSystemMessage("The /unstable-set-user-color command only "
-                              "works in Twitch channels"));
+                              "works in Twitch channels."));
         return "";
     }
     if (ctx.words.size() < 2)
@@ -616,10 +616,8 @@ QString openUsercard(const CommandContext &ctx)
                "should be open.");
     }
 
-    auto *userPopup = new UserInfoPopup(
-        getSettings()->autoCloseUserPopup,
-        static_cast<QWidget *>(&(getApp()->windows->getMainWindow())),
-        currentSplit);
+    auto *userPopup =
+        new UserInfoPopup(getSettings()->autoCloseUserPopup, currentSplit);
     userPopup->setData(userName, channel);
     userPopup->moveTo(QCursor::pos(), widgets::BoundsChecking::CursorPosition);
     userPopup->show();

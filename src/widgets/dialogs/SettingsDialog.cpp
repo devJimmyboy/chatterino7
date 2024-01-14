@@ -6,6 +6,7 @@
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "singletons/Settings.hpp"
 #include "util/LayoutCreator.hpp"
+#include "widgets/BaseWindow.hpp"
 #include "widgets/helper/Button.hpp"
 #include "widgets/helper/SettingsDialogTab.hpp"
 #include "widgets/settingspages/AboutPage.hpp"
@@ -29,9 +30,14 @@
 namespace chatterino {
 
 SettingsDialog::SettingsDialog(QWidget *parent)
-    : BaseWindow({BaseWindow::Flags::DisableCustomScaling,
-                  BaseWindow::Flags::Dialog, BaseWindow::DisableLayoutSave},
-                 parent)
+    : BaseWindow(
+          {
+              BaseWindow::Flags::DisableCustomScaling,
+              BaseWindow::Flags::Dialog,
+              BaseWindow::DisableLayoutSave,
+              BaseWindow::BoundsCheckOnShow,
+          },
+          parent)
 {
     this->setObjectName("SettingsDialog");
     this->setWindowTitle("Chatterino Settings");
@@ -46,7 +52,6 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     this->initUi();
     this->addTabs();
     this->overrideBackgroundColor_ = QColor("#111111");
-    this->scaleChangedEvent(this->scale());  // execute twice to width of item
 
     this->addShortcuts();
     this->signalHolder_.managedConnect(getApp()->hotkeys->onItemsUpdated,
@@ -107,6 +112,7 @@ void SettingsDialog::initUi()
     edit->setClearButtonEnabled(true);
     edit->findChild<QAbstractButton *>()->setIcon(
         QPixmap(":/buttons/clearSearch.png"));
+    this->ui_.search->installEventFilter(this);
 
     QObject::connect(edit.getElement(), &QLineEdit::textChanged, this,
                      &SettingsDialog::filterElements);
@@ -121,6 +127,8 @@ void SettingsDialog::initUi()
         .setLayoutType<QVBoxLayout>()
         .withoutMargin()
         .assign(&this->ui_.tabContainer);
+    this->ui_.tabContainerContainer->setFixedWidth(
+        static_cast<int>(150 * this->dpi_));
 
     // right side (pages)
     centerBox.emplace<QStackedLayout>()
@@ -200,6 +208,21 @@ void SettingsDialog::setElementFilter(const QString &query)
     this->ui_.search->setText(query);
 }
 
+bool SettingsDialog::eventFilter(QObject *object, QEvent *event)
+{
+    if (object == this->ui_.search && event->type() == QEvent::KeyPress)
+    {
+        auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
+        if (keyEvent == QKeySequence::DeleteStartOfWord &&
+            this->ui_.search->selectionLength() > 0)
+        {
+            this->ui_.search->backspace();
+            return true;
+        }
+    }
+    return false;
+}
+
 void SettingsDialog::addTabs()
 {
     this->ui_.tabContainer->setSpacing(0);
@@ -235,6 +258,7 @@ void SettingsDialog::addTab(std::function<SettingsPage *()> page,
                             SettingsTabId id, Qt::Alignment alignment)
 {
     auto tab = new SettingsDialogTab(this, std::move(page), name, iconPath, id);
+    tab->setFixedHeight(static_cast<int>(30 * this->dpi_));
 
     this->ui_.tabContainer->addWidget(tab, 0, alignment);
     this->tabs_.push_back(tab);
@@ -368,7 +392,11 @@ void SettingsDialog::scaleChangedEvent(float newDpi)
     this->setStyleSheet(styleSheet);
 
     if (this->ui_.tabContainerContainer)
+    {
         this->ui_.tabContainerContainer->setFixedWidth(int(150 * newDpi));
+    }
+
+    this->dpi_ = newDpi;
 }
 
 void SettingsDialog::themeChangedEvent()
@@ -380,15 +408,16 @@ void SettingsDialog::themeChangedEvent()
     this->setPalette(palette);
 }
 
-void SettingsDialog::showEvent(QShowEvent *)
+void SettingsDialog::showEvent(QShowEvent *e)
 {
     this->ui_.search->setText("");
+    BaseWindow::showEvent(e);
 }
 
 ///// Widget creation helpers
 void SettingsDialog::onOkClicked()
 {
-    if (!getArgs().dontSaveSettings)
+    if (!getApp()->getArgs().dontSaveSettings)
     {
         getApp()->commands->save();
         pajlada::Settings::SettingManager::gSave();
