@@ -12,6 +12,7 @@
 #include "controllers/notifications/NotificationController.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "providers/seventv/SeventvAPI.hpp"
+#include "providers/twitch/TwitchBadges.hpp"
 #include "singletons/ImageUploader.hpp"
 #ifdef CHATTERINO_HAVE_PLUGINS
 #    include "controllers/plugins/PluginController.hpp"
@@ -135,6 +136,7 @@ Application::Application(Settings &_settings, const Paths &paths,
     , sound(&this->emplace<ISoundController>(makeSoundController(_settings)))
     , twitchLiveController(&this->emplace<TwitchLiveController>())
     , twitchPubSub(new PubSub(TWITCH_PUBSUB_URL))
+    , twitchBadges(new TwitchBadges)
     , logging(new Logging(_settings))
 #ifdef CHATTERINO_HAVE_PLUGINS
     , plugins(&this->emplace(new PluginController(paths)))
@@ -155,6 +157,7 @@ Application::~Application() = default;
 void Application::fakeDtor()
 {
     this->twitchPubSub.reset();
+    this->twitchBadges.reset();
 }
 
 void Application::initialize(Settings &settings, const Paths &paths)
@@ -320,6 +323,13 @@ ISoundController *Application::getSound()
 ITwitchLiveController *Application::getTwitchLiveController()
 {
     return this->twitchLiveController;
+}
+
+TwitchBadges *Application::getTwitchBadges()
+{
+    assert(this->twitchBadges);
+
+    return this->twitchBadges.get();
 }
 
 ITwitchIrcServer *Application::getTwitch()
