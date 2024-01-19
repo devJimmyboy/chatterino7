@@ -207,7 +207,7 @@ EmotePopup::EmotePopup(QWidget *parent)
     , notebook_(new Notebook(this))
 {
     // this->setStayInScreenRect(true);
-    this->moveTo(getApp()->windows->emotePopupPos(),
+    this->moveTo(getIApp()->getWindows()->emotePopupPos(),
                  widgets::BoundsChecking::DesiredPosition);
 
     auto *layout = new QVBoxLayout();
@@ -274,7 +274,7 @@ EmotePopup::EmotePopup(QWidget *parent)
     loadEmojis(*this->viewEmojis_,
                getApp()->getEmotes()->getEmojis()->getEmojis());
     this->addShortcuts();
-    this->signalHolder_.managedConnect(getApp()->hotkeys->onItemsUpdated,
+    this->signalHolder_.managedConnect(getIApp()->getHotkeys()->onItemsUpdated,
                                        [this]() {
                                            this->clearShortcuts();
                                            this->addShortcuts();
@@ -372,7 +372,7 @@ void EmotePopup::addShortcuts()
          }},
     };
 
-    this->shortcuts_ = getApp()->hotkeys->shortcutsForCategory(
+    this->shortcuts_ = getIApp()->getHotkeys()->shortcutsForCategory(
         HotkeyCategory::PopupWindow, actions, this);
 }
 
@@ -395,9 +395,12 @@ void EmotePopup::loadChannel(ChannelPtr channel)
     auto channelChannel = std::make_shared<Channel>("", Channel::Type::None);
 
     // twitch
-    addTwitchEmoteSets(
-        getApp()->accounts->twitch.getCurrent()->accessEmotes()->emoteSets,
-        *globalChannel, *subChannel, this->channel_->getName());
+    addTwitchEmoteSets(getIApp()
+                           ->getAccounts()
+                           ->twitch.getCurrent()
+                           ->accessEmotes()
+                           ->emoteSets,
+                       *globalChannel, *subChannel, this->channel_->getName());
 
     // global
     if (Settings::instance().enableBTTVGlobalEmotes)
@@ -475,8 +478,11 @@ bool EmotePopup::eventFilter(QObject *object, QEvent *event)
 void EmotePopup::filterTwitchEmotes(std::shared_ptr<Channel> searchChannel,
                                     const QString &searchText)
 {
-    auto twitchEmoteSets =
-        getApp()->accounts->twitch.getCurrent()->accessEmotes()->emoteSets;
+    auto twitchEmoteSets = getIApp()
+                               ->getAccounts()
+                               ->twitch.getCurrent()
+                               ->accessEmotes()
+                               ->emoteSets;
     std::vector<std::shared_ptr<TwitchAccount::EmoteSet>> twitchGlobalEmotes{};
 
     for (const auto &set : twitchEmoteSets)
@@ -608,7 +614,7 @@ void EmotePopup::filterEmotes(const QString &searchText)
 
 void EmotePopup::closeEvent(QCloseEvent *event)
 {
-    getApp()->windows->setEmotePopupPos(this->pos());
+    getIApp()->getWindows()->setEmotePopupPos(this->pos());
     BaseWindow::closeEvent(event);
 }
 
