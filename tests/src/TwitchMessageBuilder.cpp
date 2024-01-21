@@ -74,6 +74,19 @@ public:
     SeventvPersonalEmotes *getSeventvPersonalEmotes() override
     {
         return &this->personalEmotes;
+    BttvEmotes *getBttvEmotes() override
+    {
+        return &this->bttvEmotes;
+    }
+
+    FfzEmotes *getFfzEmotes() override
+    {
+        return &this->ffzEmotes;
+    }
+
+    SeventvEmotes *getSeventvEmotes() override
+    {
+        return &this->seventvEmotes;
     }
 
     AccountController accounts;
@@ -85,6 +98,9 @@ public:
     SeventvBadges seventvBadges;
     HighlightController highlights;
     SeventvPersonalEmotes personalEmotes;
+    BttvEmotes bttvEmotes;
+    FfzEmotes ffzEmotes;
+    SeventvEmotes seventvEmotes;
 };
 
 }  // namespace

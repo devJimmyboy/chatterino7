@@ -54,6 +54,9 @@ class SeventvPersonalEmotes;
 class ImageUploader;
 class SeventvAPI;
 class CrashHandler;
+class BttvEmotes;
+class FfzEmotes;
+class SeventvEmotes;
 
 class IApplication
 {
@@ -92,6 +95,9 @@ public:
     virtual PluginController *getPlugins() = 0;
 #endif
     virtual Updates &getUpdates() = 0;
+    virtual BttvEmotes *getBttvEmotes() = 0;
+    virtual FfzEmotes *getFfzEmotes() = 0;
+    virtual SeventvEmotes *getSeventvEmotes() = 0;
 };
 
 class Application : public IApplication
@@ -157,6 +163,9 @@ private:
     std::unique_ptr<PubSub> twitchPubSub;
     std::unique_ptr<TwitchBadges> twitchBadges;
     std::unique_ptr<ChatterinoBadges> chatterinoBadges;
+    std::unique_ptr<BttvEmotes> bttvEmotes;
+    std::unique_ptr<FfzEmotes> ffzEmotes;
+    std::unique_ptr<SeventvEmotes> seventvEmotes;
     const std::unique_ptr<Logging> logging;
 #ifdef CHATTERINO_HAVE_PLUGINS
     PluginController *const plugins{};
@@ -208,6 +217,9 @@ public:
     {
         return this->seventvPersonalEmotes;
     }
+    BttvEmotes *getBttvEmotes() override;
+    FfzEmotes *getFfzEmotes() override;
+    SeventvEmotes *getSeventvEmotes() override;
 
     pajlada::Signals::NoArgSignal streamerModeChanged;
 
