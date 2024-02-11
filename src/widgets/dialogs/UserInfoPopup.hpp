@@ -93,7 +93,9 @@ private:
         Label *followageLabel = nullptr;
         Label *subageLabel = nullptr;
         Label *liveLabel = nullptr;
-
+        #ifdef CHATTERINO_HAVE_PLUGINS
+            Label *pronounLabel = nullptr;
+        #endif
         QCheckBox *block = nullptr;
         QCheckBox *ignoreHighlights = nullptr;
 

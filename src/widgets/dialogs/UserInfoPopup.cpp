@@ -12,6 +12,9 @@
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "providers/IvrApi.hpp"
+#ifdef CHATTERINO_HAVE_PLUGINS
+#include "providers/pronouns/Api.hpp"
+#endif
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
@@ -44,6 +47,7 @@
 const QString TEXT_FOLLOWERS("Followers: %1");
 const QString TEXT_CREATED("Created: %1");
 const QString TEXT_LIVE("Status: %1");
+const QString TEXT_PRONOUN("Pronouns: %1");
 const QString TEXT_TITLE("%1's Usercard - #%2");
 #define TEXT_USER_ID "ID: "
 #define TEXT_UNAVAILABLE "(not available)"
@@ -386,6 +390,10 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                 .assign(&this->ui_.createdDateLabel);
             vbox.emplace<Label>(TEXT_LIVE.arg(""))
             .assign(&this->ui_.liveLabel);
+#ifdef CHATTERINO_HAVE_PLUGINS
+            vbox.emplace<Label>(TEXT_PRONOUN.arg(""))
+                .assign(&this->ui_.pronounLabel);
+            #endif
 
             vbox.emplace<Label>("").assign(&this->ui_.followageLabel);
             vbox.emplace<Label>("").assign(&this->ui_.subageLabel);
@@ -822,7 +830,9 @@ void UserInfoPopup::updateUserData()
             TEXT_FOLLOWERS.arg(TEXT_UNAVAILABLE));
         this->ui_.createdDateLabel->setText(TEXT_CREATED.arg(TEXT_UNAVAILABLE));
         this->ui_.liveLabel->setText(TEXT_LIVE.arg(TEXT_UNAVAILABLE));
-
+#ifdef CHATTERINO_HAVE_PLUGINS
+        this->ui_.pronounLabel->setText(TEXT_PRONOUN.arg(TEXT_UNAVAILABLE));
+        #endif
         this->ui_.nameLabel->setText(this->userName_);
 
         this->ui_.userIDLabel->setText(QString("ID ") +
@@ -879,6 +889,20 @@ void UserInfoPopup::updateUserData()
         {
             this->loadAvatar(user);
         }
+#ifdef CHATTERINO_HAVE_PLUGINS
+        chatterino::pronouns::fetchPronounsForUser(
+            user.login,
+            [this, hack](const auto &pronouns) {
+                if (!hack.lock())
+                {
+                    return;
+                }
+                this->ui_.pronounLabel->setText(TEXT_PRONOUN.arg(pronouns));
+            },
+            []() {
+                qCWarning(chatterinoTwitch) << "Error getting pronouns";
+            });
+        #endif
 
         getHelix()->getChannelFollowers(
             user.id,
